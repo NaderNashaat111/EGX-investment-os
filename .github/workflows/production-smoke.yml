@@ -1,0 +1,57 @@
+name: Production smoke checks
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '20 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait briefly for Vercel production deployment
+        if: github.event_name == 'push'
+        run: sleep 45
+
+      - name: Verify production page and security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://egx-investment-os.vercel.app/'
+          BODY="$(mktemp)"
+          HEADERS="$(mktemp)"
+
+          curl --fail --silent --show-error --location \
+            --retry 4 --retry-delay 10 --retry-all-errors \
+            --dump-header "$HEADERS" \
+            --output "$BODY" \
+            "$URL"
+
+          STATUS="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "$HEADERS")"
+          test "$STATUS" = '200'
+
+          grep -Fq '<title>EGX Investment OS</title>' "$BODY"
+          grep -Fq 'No broker orders are placed by this application.' "$BODY"
+          grep -Fq 'Workspace temporarily unavailable' "$BODY"
+
+          tr -d '\r' < "$HEADERS" > "${HEADERS}.normalized"
+          H="${HEADERS}.normalized"
+
+          grep -Eiq '^strict-transport-security: .+' "$H"
+          grep -Eiq '^content-security-policy: .*frame-ancestors .none.' "$H"
+          grep -Eiq '^x-content-type-options: nosniff$' "$H"
+          grep -Eiq '^x-frame-options: DENY$' "$H"
+          grep -Eiq '^referrer-policy: strict-origin-when-cross-origin$' "$H"
+          grep -Eiq '^cross-origin-opener-policy: same-origin$' "$H"
+          grep -Eiq '^cross-origin-resource-policy: same-origin$' "$H"
+          grep -Eiq '^x-permitted-cross-domain-policies: none$' "$H"
+          grep -Eiq '^permissions-policy: .*camera=\(\).*microphone=\(\).*geolocation=\(\)' "$H"
+          grep -Eiq '^cache-control: .*no-store.*max-age=0' "$H"
+
+          echo 'Production smoke checks passed.'
