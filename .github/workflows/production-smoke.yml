@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   production-smoke:
@@ -112,3 +113,35 @@ jobs:
           fi
 
           echo 'No live broker-execution language detected.'
+
+      - name: Open or update smoke incident on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE='Production smoke checks failing'
+          ISSUE_NUMBER="$(gh issue list --state open --search "$TITLE in:title" --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -n1)"
+          BODY="Production smoke checks failed on $(date -u +'%Y-%m-%d %H:%M:%S UTC').\n\nRun: ${RUN_URL}\n\nTreat this as an operational incident until a later smoke run passes. Real-money execution remains disabled by design."
+
+          if [ -n "$ISSUE_NUMBER" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+      - name: Close resolved smoke incident
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE='Production smoke checks failing'
+          mapfile -t ISSUES < <(gh issue list --state open --search "$TITLE in:title" --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number")
+          for ISSUE_NUMBER in "${ISSUES[@]}"; do
+            gh issue close "$ISSUE_NUMBER" --comment "Production smoke checks recovered successfully. Passing run: ${RUN_URL}"
+          done
