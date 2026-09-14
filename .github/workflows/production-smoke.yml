@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: '20 2 * * *'
+    - cron: '20 */6 * * *'
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ permissions:
 jobs:
   production-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - name: Wait briefly for Vercel production deployment
         if: github.event_name == 'push'
@@ -54,4 +54,61 @@ jobs:
           grep -Eiq '^permissions-policy: .*camera=\(\).*microphone=\(\).*geolocation=\(\)' "$H"
           grep -Eiq '^cache-control: .*no-store.*max-age=0' "$H"
 
-          echo 'Production smoke checks passed.'
+          echo 'Production page checks passed.'
+
+      - name: Verify Supabase API security boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://hpolboqjrchstbsdhwuh.supabase.co/functions/v1'
+
+          expect_status() {
+            local expected="$1" method="$2" url="$3" body="${4:-}"
+            local output status
+            output="$(mktemp)"
+            if [ "$method" = 'POST' ]; then
+              status="$(curl --silent --show-error --output "$output" --write-out '%{http_code}' \
+                --retry 3 --retry-delay 5 --retry-all-errors \
+                -X POST -H 'content-type: application/json' --data "$body" "$url")"
+            else
+              status="$(curl --silent --show-error --output "$output" --write-out '%{http_code}' \
+                --retry 3 --retry-delay 5 --retry-all-errors \
+                -X "$method" "$url")"
+            fi
+            if [ "$status" != "$expected" ]; then
+              echo "Expected $expected from $url, got $status"
+              cat "$output"
+              exit 1
+            fi
+          }
+
+          # User APIs must reject missing user sessions.
+          expect_status 401 POST "$BASE/portfolio-state-api" '{}'
+          expect_status 401 POST "$BASE/recommendation-workflow-api" '{"action":"feed"}'
+          expect_status 401 POST "$BASE/portfolio-onboarding-api" '{"action":"preview","payload":{}}'
+          expect_status 401 POST "$BASE/reference-data-api" '{"action":"instruments"}'
+
+          # Internal workers/ingestors use custom backend-key authorization.
+          expect_status 401 POST "$BASE/ai-thesis-worker" '{}'
+          expect_status 401 POST "$BASE/eodhd-eod-ingest" '{"ticker":"COMI"}'
+
+          # Public auth portal is GET-only and should reject state-changing methods.
+          expect_status 405 POST "$BASE/user-auth-portal" '{}'
+          expect_status 200 GET "$BASE/user-auth-portal"
+
+          echo 'Supabase security-boundary checks passed.'
+
+      - name: Safety assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(curl --fail --silent --show-error --location \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            https://egx-investment-os.vercel.app/)"
+
+          if grep -Eiq 'execute real trade|place broker order|live broker execution' <<<"$BODY"; then
+            echo 'Unexpected broker-execution language detected.'
+            exit 1
+          fi
+
+          echo 'No live broker-execution language detected.'
