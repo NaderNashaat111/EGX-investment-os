@@ -2,7 +2,7 @@
 
 **Purpose:** Canonical continuity record for future EGX Investment OS work. Read this before proposing user actions, re-opening blockers, or changing an accepted decision. Update it whenever a material implementation status, blocker, accepted limitation, safety decision, deployment state, or next-step dependency changes.
 
-**Last updated:** 2026-09-13 (Africa/Cairo)
+**Last updated:** 2026-09-14 (Africa/Cairo)
 
 ## Working protocol
 
@@ -44,13 +44,14 @@
 
 ## AI thesis batch / budget
 
-- AI provider/model path is operational and successfully producing validated GPT-5.6 Sol theses.
-- Current tracked batch size: 19 FULL_THESIS dispatches.
-- Latest known batch state before this log: 5 validated completions, 13 queued, 1 retriable dispatch, 0 terminal dispatch failures, 0 provider-wait failures.
-- One attempt hit the provider output-token ceiling; it was correctly treated as retriable rather than accepted as incomplete output.
-- Daily provider safety gate: **20 calls per Cairo calendar day**.
-- Latest daily usage reached the 20-call cap at about **$2.36 estimated spend**, so remaining due dispatches were intentionally held by `DAILY_PROVIDER_BUDGET_EXHAUSTED`.
-- **Decision:** do not bypass the safety gate merely to finish sooner. Allow the Cairo daily budget reset and scheduled worker to resume automatically.
+- AI provider/model path is operational and successfully producing GPT-5.6 Sol theses.
+- Tracked FULL_THESIS batch size: **19 dispatches**.
+- **2026-09-14 update:** the Cairo daily provider budget reset occurred successfully and the worker resumed automatically.
+- The tracked 19-dispatch batch is now **19 COMPLETED / 0 QUEUED / 0 RETRY / 0 RUNNING / 0 WAITING_PROVIDER / 0 FAILED**.
+- Current Cairo-day provider usage at the latest check: **16 calls**, about **$1.91 estimated spend**, 334,885 input tokens and 21,923 output tokens.
+- Budget function currently allows additional calls, while the worker gate reports `NO_DUE_WORK` because no thesis dispatches are due.
+- Daily provider safety gate remains **20 calls per Cairo calendar day**.
+- **Decision:** continue respecting the safety gate; do not bypass it merely to finish sooner.
 
 ## Frontend reliability / QA
 
@@ -70,18 +71,16 @@ Known QA limitation:
 
 ## Current blockers / dependencies
 
-1. **AI batch completion:** waiting for Cairo daily provider-budget reset and scheduled worker continuation.
-2. **AI/shadow calibration:** requires the remaining thesis outputs and downstream evaluation data.
-3. **Authenticated browser E2E:** requires suitable interactive browser capability.
-4. Supabase leaked-password warning is an **accepted plan limitation**, not a blocker.
+1. **AI/shadow calibration:** thesis dispatch completion is no longer a blocker; next step is validating the completed outputs and downstream evaluation state.
+2. **Authenticated browser E2E:** requires suitable interactive browser capability.
+3. Supabase leaked-password warning is an **accepted plan limitation**, not a blocker.
 
 ## Next execution sequence
 
-1. After Cairo budget reset, verify the AI worker resumes automatically.
-2. Track remaining dispatches to terminal/validated state; inspect retries or non-validated outputs individually.
-3. Verify downstream post-AI shadow operations and portfolio recommendation cycle.
-4. Run recommendation/shadow evaluation and begin quality/calibration analysis.
-5. Reassess go-live readiness only after sufficient validation evidence; keep real-money execution disabled until explicit approval.
+1. Validate the completed 19-thesis batch at attempt/output level and inspect any non-validated/incomplete attempts that were retried before final completion.
+2. Verify downstream post-AI shadow operations and portfolio recommendation cycle consumed the completed batch correctly.
+3. Run recommendation/shadow evaluation and begin quality/calibration analysis.
+4. Reassess go-live readiness only after sufficient validation evidence; keep real-money execution disabled until explicit approval.
 
 ## Material change log
 
@@ -92,4 +91,5 @@ Known QA limitation:
 - **2026-09-13:** Production operations runbook added.
 - **2026-09-13:** Automated GitHub Actions production smoke workflow added; run #1 passed.
 - **2026-09-13:** Supabase leaked-password protection explicitly recorded as unavailable on current plan and accepted, so it must not be repeatedly presented as a user action.
-- **2026-09-13:** AI batch paused safely at daily 20-provider-call Cairo budget cap; automatic continuation after reset is expected.
+- **2026-09-13:** AI batch paused safely at daily 20-provider-call Cairo budget cap.
+- **2026-09-14:** Cairo daily AI budget reset succeeded; worker resumed automatically and completed the remaining tracked thesis dispatches. Batch is now 19/19 completed with zero queued/retry/failed dispatches.
