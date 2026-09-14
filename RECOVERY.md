@@ -4,6 +4,8 @@
 
 The production Supabase project is currently on the Free plan. Supabase does not provide normal downloadable automatic backups on Free. The project therefore relies on explicit logical exports for off-site recovery until the plan changes.
 
+Supabase's current documentation recommends that Free plan projects regularly export their data using the Supabase CLI `db dump` command and retain off-site backups. The repository includes `ops/logical-backup.sh` as a guarded export helper for this purpose.
+
 ## Recovery objectives
 
 - Preserve schema, data, and operational configuration needed to rebuild the database.
@@ -13,7 +15,7 @@ The production Supabase project is currently on the Free plan. Supabase does not
 
 ## Recommended backup method
 
-Use Supabase CLI / `pg_dump` from a trusted machine or private CI environment with the database connection string supplied through a secret manager.
+Use Supabase CLI from a trusted machine or private CI environment with the database connection string supplied through a secret manager.
 
 Suggested logical-backup components:
 
@@ -23,21 +25,36 @@ Suggested logical-backup components:
 4. a separate inventory of Edge Function names/versions and required secret names
 5. repository source (`main`) for frontend, workflows, runbooks, and project state
 
-Example pattern (run only from a trusted environment; do not commit output):
+The checked-in helper performs the database export portion:
 
 ```bash
-supabase db dump --db-url "$SUPABASE_DB_URL" --role-only -f roles.sql
-supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
-supabase db dump --db-url "$SUPABASE_DB_URL" --data-only -f data.sql
+export SUPABASE_DB_URL='loaded-from-your-secret-store'
+export BACKUP_OUTPUT_DIR='/private/non-repository/path'
+./ops/logical-backup.sh
 ```
 
-Exact CLI flags should be checked against the installed Supabase CLI version before execution.
+The helper:
+
+- requires `SUPABASE_DB_URL` and `BACKUP_OUTPUT_DIR`
+- checks the installed Supabase CLI version before dumping
+- refuses to place backup output anywhere inside the Git repository
+- uses restrictive file permissions (`umask 077` and a mode-700 output directory)
+- exports roles/grants, schema, and data separately
+- validates component checksums before packaging
+- emits a bundle checksum for off-site verification
+- removes its temporary plaintext working directory on exit
+- intentionally does not upload the resulting bundle anywhere
+
+The final bundle still contains sensitive production data. It must be transferred to an approved private encrypted/off-site destination, verified there, and removed from the temporary/local location.
 
 ## Automated backup option
 
-A private GitHub Actions workflow can automate logical dumps using a `SUPABASE_DB_URL` repository secret and upload the encrypted dump to a private/off-site destination. Do **not** store the dump as a public repository file or expose the connection string in workflow output.
+The export automation is now prepared, but scheduled off-site backup is intentionally **not enabled** until both of these user-owned items exist:
 
-This is intentionally not enabled yet because the required database connection secret is not available to the current automation context. Adding that secret is a user-owned credential action.
+1. a private database connection secret (`SUPABASE_DB_URL`) in the chosen automation secret store
+2. an approved private encrypted/off-site backup destination with its required credentials
+
+Do **not** upload database dumps as artifacts from this public repository or commit them as repository files. Once a private destination is selected, wrap `ops/logical-backup.sh` in a scheduled private workflow/job that uploads the bundle, verifies the remote checksum, applies retention, deletes the runner copy, and alerts on failure.
 
 ## Restore sequence
 
