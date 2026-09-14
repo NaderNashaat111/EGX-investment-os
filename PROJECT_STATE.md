@@ -14,7 +14,8 @@
 - Supabase production project: `egx-investment-os` (`hpolboqjrchstbsdhwuh`).
 - GitHub: `NaderNashaat111/EGX-investment-os`, `main`; connector read/write WORKING.
 - Vercel Git auto-deploy WORKING; production frontend HTTP 200 with hardened security/cache headers.
-- GitHub Actions `Production smoke checks` enabled, runs every 6 hours plus push/manual, and latest hardened run PASS.
+- GitHub Actions `Production smoke checks` enabled, runs every 6 hours plus push/manual, and latest completed hardened run PASS.
+- Smoke failure alerting now has an incident lifecycle: a failing run opens or updates one `Production smoke checks failing` GitHub issue; a later successful run closes the open incident automatically. This avoids duplicate incident spam while preserving a durable failure signal.
 - Frontend reliability preserves workspace/recommendation/history data across transient refresh failures and avoids false onboarding/empty states.
 
 ## Backend / operations
@@ -50,8 +51,10 @@
 - Data-integrity and privilege audit completed; unsafe `portfolio_positions` authenticated privileges removed.
 - Failure/recovery smoke coverage expanded: unauthenticated user APIs must reject; backend-only functions reject missing backend key; auth portal POST rejected; no-live-broker assertion retained.
 - Operational monitoring improved to six-hour external smoke checks plus internal ops snapshots/cron health.
+- Production smoke incident alerting added with automatic open/update-on-failure and close-on-recovery issue lifecycle.
 - Calibration preparation completed: `ops/calibration-report.sql` covers maturity, absolute/benchmark/excess return, outcomes, candidate details, quality/risk and safety invariants.
-- Recovery readiness documented in `RECOVERY.md`; off-site logical backup automation remains credential-dependent and credentials must stay in a private secret store.
+- Recovery readiness documented in `RECOVERY.md`; `ops/logical-backup.sh` now provides a guarded logical-export helper that refuses repository output, uses restrictive permissions, exports roles/schema/data, verifies component checksums, and emits a bundle checksum.
+- Scheduled off-site backup upload remains credential/destination-dependent and credentials must stay in a private secret store.
 - Operational SLOs and repeatable production integrity audit added.
 - Frontend/API contract/static UX review found no current contract blocker; responsive/mobile, empty/loading/error/retry/onboarding/accessibility states are implemented. Full authenticated visual E2E remains tooling-blocked.
 - Repository housekeeping completed: obsolete `vercel-trigger.txt` removed. Production deploy remains Git-driven.
@@ -70,22 +73,24 @@ Known limitation: full authenticated interactive browser click-through E2E canno
 
 ## Recovery / backup
 - `RECOVERY.md` documents logical dump/restore, secrets handling and post-restore acceptance checks.
-- Automated off-site DB export is not enabled because it requires a private DB connection credential in a secret store. Never place credentials/backups in the public repository or chat.
+- `ops/logical-backup.sh` prepares a local logical export safely but intentionally does not upload database data from the public repository context.
+- Automated off-site DB export is not enabled because it requires both a private DB connection credential in a secret store and an approved private encrypted/off-site destination with credentials. Never place credentials/backups in the public repository or chat.
 
 ## Remaining blockers / dependencies
 1. **Outcome calibration:** time-dependent; first 5-day evaluation due 2026-09-20 21:30 Cairo, then 20/60/120-day horizons.
 2. **Authenticated visual/browser E2E:** blocked by assistant environment browser tooling.
-3. **Automated off-site DB backup:** blocked on private DB credential/secret-store configuration; documented manual recovery path exists.
+3. **Automated off-site DB backup upload:** export helper is ready; final schedule/upload is blocked on private `SUPABASE_DB_URL` plus selection/configuration of an approved private encrypted off-site destination.
 4. **EGAL official evidence gap:** exact first-party attachment currently unretrievable; non-blocking and must not be filled from secondary mirrors.
 5. Supabase leaked-password warning is accepted plan limitation, not blocker.
 
 ## Next execution sequence
 1. Preserve baseline and continue normal scheduled ingestion/analysis/AI/shadow/recommendation cycles.
-2. Continue six-hour production/security smoke checks and operational SLO monitoring.
+2. Continue six-hour production/security smoke checks, automatic incident lifecycle, and operational SLO monitoring.
 3. Verify simulated shadow fills after next valid market bar.
-4. Retry EGAL official-asset retrieval only through exact official/first-party evidence paths.
-5. At/after 2026-09-20 21:30 Cairo run `ops/calibration-report.sql` and analyze first mature 5-day outcomes; accumulate 20/60/120-day outcomes before stronger calibration conclusions.
-6. Keep real-money execution disabled until explicit go-live approval.
+4. Configure scheduled off-site backup only after private destination and secrets are approved/configured.
+5. Retry EGAL official-asset retrieval only through exact official/first-party evidence paths.
+6. At/after 2026-09-20 21:30 Cairo run `ops/calibration-report.sql` and analyze first mature 5-day outcomes; accumulate 20/60/120-day outcomes before stronger calibration conclusions.
+7. Keep real-money execution disabled until explicit go-live approval.
 
 ## Material change log
 - 2026-09-13: GitHub write restored; Vercel security/cache hardening, frontend reliability fixes, runbook, and production smoke deployed; leaked-password plan limitation accepted; AI cohort safely paused at daily call cap.
@@ -94,3 +99,4 @@ Known limitation: full authenticated interactive browser click-through E2E canno
 - 2026-09-14: Deep privilege audit found and removed authenticated mutation/TRUNCATE privileges from `portfolio_positions`; post-migration security advisor remains clean except accepted auth warning.
 - 2026-09-14: Added `ops/operational-readiness.sql` and `OPERATIONS_SLO.md`; removed obsolete `vercel-trigger.txt`.
 - 2026-09-14: EGAL bulletin 339881 retrieval retried; exact official asset still unavailable, so gap remains correctly OPEN/non-blocking rather than weakening evidence standards.
+- 2026-09-14: Added production-smoke incident issue lifecycle and guarded `ops/logical-backup.sh`; backup upload remains intentionally blocked until a private destination and secret credentials are configured.
