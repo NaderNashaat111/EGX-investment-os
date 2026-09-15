@@ -2,9 +2,9 @@
 
 ## Current plan constraint
 
-The production Supabase project is currently on the Free plan. Supabase does not provide normal downloadable automatic backups on Free. The project therefore relies on explicit logical exports for off-site recovery until the plan changes.
+The production Supabase project is currently on the Free plan. The project therefore retains an independent logical-export recovery path rather than depending on managed downloadable backups.
 
-Supabase's current documentation recommends that Free plan projects regularly export their data using the Supabase CLI `db dump` command and retain off-site backups. The repository includes `ops/logical-backup.sh` as a guarded export helper for this purpose.
+The repository includes `ops/logical-backup.sh` as a guarded export helper and `.github/workflows/offsite-backup.yml` as the scheduled off-site automation.
 
 ## Recovery objectives
 
@@ -13,27 +13,37 @@ Supabase's current documentation recommends that Free plan projects regularly ex
 - Treat restores as destructive operations requiring explicit approval.
 - Keep real-money execution disabled after any restore until integrity checks pass.
 
-## Recommended backup method
+## Production backup configuration
 
-Use Supabase CLI from a trusted machine or private CI environment with the database connection string supplied through a secret manager.
+Automated off-site logical backup is ENABLED.
 
-Suggested logical-backup components:
+- Schedule: daily at 01:20 UTC (04:20 Africa/Cairo).
+- Source: production Supabase database through a private `SUPABASE_DB_URL` GitHub Actions secret.
+- Destination: private Cloudflare R2 bucket `egx-investment-os-backups`.
+- R2 credentials are restricted GitHub Actions secrets and are never committed to the repository.
+- Object layout: `daily/YYYY/MM/DD/<backup-bundle>` plus its `.sha256` file.
+- The runner removes its temporary backup directory even if a later step fails.
+- The first production off-site backup completed successfully on 2026-09-15 in GitHub Actions run `35017101867`.
+- That run exported roles/grants, schema and data, validated local component checksums, uploaded the bundle and checksum to R2, verified the remote object existed, and removed the runner copy.
+- The workflow was subsequently hardened to download the uploaded R2 object and compare its SHA-256 with the local bundle. Future successful runs therefore require end-to-end remote checksum equality.
 
-1. roles / grants where applicable
-2. schema
-3. data
-4. a separate inventory of Edge Function names/versions and required secret names
-5. repository source (`main`) for frontend, workflows, runbooks, and project state
+### Retention
 
-The checked-in helper performs the database export portion:
+Target retention for the `daily/` prefix is **35 days**. Configure this as an R2 Object lifecycle rule so expiry is enforced independently of GitHub Actions. Until the lifecycle rule is confirmed enabled in Cloudflare, retention configuration remains the only open backup-control item.
 
-```bash
-export SUPABASE_DB_URL='loaded-from-your-secret-store'
-export BACKUP_OUTPUT_DIR='/private/non-repository/path'
-./ops/logical-backup.sh
-```
+Recommended rule:
 
-The helper:
+- Rule name: `expire-daily-backups-35d`
+- Prefix: `daily/`
+- Action: delete/expire objects
+- Age: 35 days
+- Status: enabled
+
+Do not use an Empty Bucket operation. Do not create a lifecycle rule with a 1-day expiry. The `.tar.gz` bundle and `.sha256` sidecar share the `daily/` prefix and should expire together.
+
+## Logical backup helper
+
+The checked-in helper:
 
 - requires `SUPABASE_DB_URL` and `BACKUP_OUTPUT_DIR`
 - checks the installed Supabase CLI version before dumping
@@ -43,25 +53,15 @@ The helper:
 - validates component checksums before packaging
 - emits a bundle checksum for off-site verification
 - removes its temporary plaintext working directory on exit
-- intentionally does not upload the resulting bundle anywhere
 
-The final bundle still contains sensitive production data. It must be transferred to an approved private encrypted/off-site destination, verified there, and removed from the temporary/local location.
-
-## Automated backup option
-
-The export automation is now prepared, but scheduled off-site backup is intentionally **not enabled** until both of these user-owned items exist:
-
-1. a private database connection secret (`SUPABASE_DB_URL`) in the chosen automation secret store
-2. an approved private encrypted/off-site backup destination with its required credentials
-
-Do **not** upload database dumps as artifacts from this public repository or commit them as repository files. Once a private destination is selected, wrap `ops/logical-backup.sh` in a scheduled private workflow/job that uploads the bundle, verifies the remote checksum, applies retention, deletes the runner copy, and alerts on failure.
+The final bundle contains sensitive production data and must remain only in approved private storage.
 
 ## Restore sequence
 
 1. Declare incident and stop state-changing user actions if necessary.
 2. Preserve current evidence/logs before restoring.
 3. Create/prepare the target Supabase project/database.
-4. Restore schema first, then data, then grants/roles as appropriate.
+4. Restore schema first, then data, then grants/roles as appropriate. The current data-only dump can emit circular-FK restore warnings for tables such as `research_facts`, `legal_status_events`, `corporate_actions`, and `disclosure_documents`; perform restores in an isolated target and use the appropriate trigger/constraint handling rather than improvising in production.
 5. Reconfigure required Edge Function secrets manually from the secret manager; backups must not contain production secrets.
 6. Deploy the known-good Edge Function versions and frontend from GitHub.
 7. Run security advisor and integrity checks.
@@ -87,6 +87,10 @@ At minimum verify:
 - Vercel production returns HTTP 200 with expected security headers
 - GitHub Production smoke workflow passes
 
+## Periodic recovery test
+
+A successful backup is not sufficient evidence of restorability. Perform a non-production restore drill after the backup format or schema changes materially and periodically thereafter. The drill must never overwrite production and must finish with the post-restore validation checks above.
+
 ## Plan-change note
 
-If the Supabase organization upgrades to Pro, revisit this document. Paid plans provide managed daily backups; PITR is a separate paid add-on. Even then, retaining an independent logical-export procedure is useful for portability and disaster recovery.
+If the Supabase organization upgrades, revisit the relationship between managed backups/PITR and this independent logical-export path. Retaining an independent off-site logical export remains useful for portability and disaster recovery.
