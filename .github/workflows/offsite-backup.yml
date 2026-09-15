@@ -26,7 +26,7 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate required secrets
         shell: bash
@@ -65,9 +65,14 @@ jobs:
           aws s3 cp "$BUNDLE" "s3://${R2_BUCKET}/${KEY}" --endpoint-url "$R2_ENDPOINT" --only-show-errors
           aws s3 cp "$CHECKSUM_FILE" "s3://${R2_BUCKET}/${KEY}.sha256" --endpoint-url "$R2_ENDPOINT" --only-show-errors
           LOCAL_SHA=$(sha256sum "$BUNDLE" | awk '{print $1}')
+          VERIFY_FILE=$(mktemp)
+          aws s3 cp "s3://${R2_BUCKET}/${KEY}" "$VERIFY_FILE" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          REMOTE_SHA=$(sha256sum "$VERIFY_FILE" | awk '{print $1}')
+          rm -f "$VERIFY_FILE"
+          test "$LOCAL_SHA" = "$REMOTE_SHA" || { echo 'Remote backup checksum mismatch'; exit 1; }
           aws s3api head-object --bucket "$R2_BUCKET" --key "$KEY" --endpoint-url "$R2_ENDPOINT" >/dev/null
-          echo "Uploaded and remotely verified object presence: $KEY"
-          echo "Local SHA-256: $LOCAL_SHA"
+          echo "Uploaded and checksum-verified remote object: $KEY"
+          echo "Verified SHA-256: $LOCAL_SHA"
 
       - name: Remove runner backup copy
         if: always()
