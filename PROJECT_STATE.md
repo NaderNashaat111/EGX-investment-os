@@ -41,15 +41,16 @@
 - 68 outcome evaluations scheduled across 5/20/60/120-day horizons. Earliest due 2026-09-20 18:30 UTC / 21:30 Cairo.
 - Decision: freeze AI prompt, decision thresholds, allocation policy, and performance-driven tuning until baseline outcome data matures.
 
-## Recovery / backup — operational
+## Recovery / backup — operationally complete
 - `ops/logical-backup.sh` safely exports roles/grants, schema and data with component checksum validation and guarded temporary storage.
 - Private Cloudflare R2 bucket `egx-investment-os-backups` is the approved off-site destination.
 - GitHub Actions secrets `SUPABASE_DB_URL`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are configured; credentials are not stored in repository files or chat.
 - `.github/workflows/offsite-backup.yml` is enabled on a daily 01:20 UTC / 04:20 Cairo schedule plus manual dispatch.
 - First real production backup run `35017101867` completed SUCCESS on 2026-09-15: roles, schema and data exported; component checks passed; bundle and checksum uploaded to R2; remote object presence verified; runner copy removed.
 - Workflow hardened after the successful run to use Node-24-compatible `actions/checkout@v5` and to download the uploaded R2 bundle and require SHA-256 equality with the local bundle before success.
-- Remaining backup-control item: enable a Cloudflare R2 Object lifecycle rule for prefix `daily/` with 35-day expiry. This is configuration-only; the actual automated off-site backup path is working.
-- `RECOVERY.md` is updated with the live configuration, first successful run, retention target, restore caveats and restore-drill requirement.
+- Cloudflare R2 lifecycle retention is enabled for prefix `daily/` with 35-day expiry, covering backup bundles and checksum sidecars.
+- `RECOVERY.md` documents the live configuration, restore caveats, validation requirements and restore-drill requirement.
+- Backup setup is CLOSED as an implementation/readiness item. Ongoing operations should verify subsequent scheduled runs and eventually perform a controlled restore drill.
 
 ## EGAL evidence gap
 - One OPEN non-global-blocking source gap remains: `EGAL:2026-03-31:NET_PROFIT_COMPARABLE` / `KNOWN_OFFICIAL_DISCLOSURE_UNRETRIEVED`.
@@ -64,19 +65,17 @@ Known limitation: full authenticated interactive browser click-through E2E canno
 
 ## Remaining blockers / dependencies
 1. **Outcome calibration:** time-dependent; first 5-day evaluation due 2026-09-20 21:30 Cairo, then 20/60/120-day horizons.
-2. **R2 retention policy:** user-owned Cloudflare bucket setting; enable 35-day expiry for prefix `daily/`. Backup creation/upload itself is verified working.
-3. **Authenticated visual/browser E2E:** blocked by current assistant browser tooling.
-4. **EGAL official evidence gap:** exact first-party attachment currently unretrievable; non-blocking and must not be filled from secondary mirrors.
-5. Supabase leaked-password warning is accepted plan limitation, not blocker.
+2. **Authenticated visual/browser E2E:** blocked by current assistant browser tooling.
+3. **EGAL official evidence gap:** exact first-party attachment currently unretrievable; non-blocking and must not be filled from secondary mirrors.
+4. Supabase leaked-password warning is accepted plan limitation, not blocker.
 
 ## Next execution sequence
-1. Enable/verify the R2 35-day lifecycle rule, then close backup configuration as operationally complete.
-2. Preserve baseline and continue normal scheduled ingestion/analysis/AI/shadow/recommendation cycles.
-3. Continue production/security smoke checks, automatic incident lifecycle, and operational SLO monitoring.
-4. Verify subsequent scheduled off-site backup succeeds with the new remote checksum comparison.
-5. Retry EGAL official-asset retrieval only through exact official/first-party evidence paths.
-6. At/after 2026-09-20 21:30 Cairo run `ops/calibration-report.sql` and analyze first mature 5-day outcomes; accumulate 20/60/120-day outcomes before stronger calibration conclusions.
-7. Keep real-money execution disabled until explicit go-live approval.
+1. Preserve baseline and continue normal scheduled ingestion/analysis/AI/shadow/recommendation cycles.
+2. Continue production/security smoke checks, automatic incident lifecycle, and operational SLO monitoring.
+3. Verify the next scheduled off-site backup succeeds with end-to-end remote checksum comparison.
+4. Retry EGAL official-asset retrieval only through exact official/first-party evidence paths.
+5. At/after 2026-09-20 21:30 Cairo run `ops/calibration-report.sql` and analyze first mature 5-day outcomes; accumulate 20/60/120-day outcomes before stronger calibration conclusions.
+6. Keep real-money execution disabled until explicit go-live approval.
 
 ## Material change log
 - 2026-09-13: GitHub write restored; Vercel security/cache hardening, frontend reliability fixes, runbook, and production smoke deployed; leaked-password plan limitation accepted.
@@ -85,4 +84,5 @@ Known limitation: full authenticated interactive browser click-through E2E canno
 - 2026-09-14: Authenticated mutation/TRUNCATE privileges removed from `portfolio_positions`.
 - 2026-09-14: EGAL exact official asset remained unavailable; gap retained OPEN/non-blocking.
 - 2026-09-15: Cloudflare R2 off-site destination and GitHub backup secrets configured. First production logical backup successfully exported and uploaded to R2 in Actions run `35017101867`.
-- 2026-09-15: Backup workflow hardened with Node-24-compatible checkout and end-to-end remote SHA-256 verification; recovery documentation updated. Only R2 35-day lifecycle configuration remains before closing backup setup.
+- 2026-09-15: Backup workflow hardened with Node-24-compatible checkout and end-to-end remote SHA-256 verification; recovery documentation updated.
+- 2026-09-15: Cloudflare R2 35-day lifecycle retention enabled for `daily/`; off-site backup implementation/readiness item CLOSED.
